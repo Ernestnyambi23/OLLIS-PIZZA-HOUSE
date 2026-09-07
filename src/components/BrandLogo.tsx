@@ -7,6 +7,8 @@ interface BrandLogoProps {
   showText?: boolean;
   shape?: 'rounded' | 'circle' | 'square' | 'none';
   alt?: string;
+  variant?: 'full' | 'icon' | 'badge';
+  dark?: boolean;
 }
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({
@@ -14,7 +16,9 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   size = 'md',
   showText = false,
   shape = 'rounded',
-  alt = "Olli's Pizza House & Take Aways",
+  alt = 'ENH RESTAURANT MANAGEMENT AIDE LTD.',
+  variant = 'icon',
+  dark = false,
 }) => {
   let dimensionClasses = 'w-9 h-9';
   if (size === 'sm') dimensionClasses = 'w-7 h-7';
@@ -34,9 +38,9 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       : 'rounded-xl';
 
   return (
-    <div className={`inline-flex items-center gap-2 ${className}`}>
+    <div className={`inline-flex items-center gap-2.5 ${className}`}>
       <div
-        className={`${dimensionClasses} ${shapeClasses} overflow-hidden shrink-0 bg-white shadow-xs border border-red-100/50 flex items-center justify-center p-1`}
+        className={`${dimensionClasses} ${shapeClasses} overflow-hidden shrink-0 bg-white shadow-xs border border-amber-900/10 flex items-center justify-center p-0.5`}
       >
         <img
           src={brandLogoImg}
@@ -47,14 +51,23 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       </div>
       {showText && (
         <div className="flex flex-col text-left">
-          <span className="text-xs font-black tracking-tight text-[#b3402f] uppercase leading-tight">
-            Olli's Pizza House
+          <span
+            className={`text-sm font-black tracking-tight uppercase leading-tight font-sans ${
+              dark ? 'text-amber-400' : 'text-[#163352]'
+            }`}
+          >
+            ENH
           </span>
-          <span className="text-[9px] font-bold text-[#8a2c1f] uppercase tracking-wider">
-            & Take Aways
+          <span
+            className={`text-[8.5px] font-extrabold uppercase tracking-wider ${
+              dark ? 'text-slate-400' : 'text-[#163352]/80'
+            }`}
+          >
+            Restaurant Management Aide Ltd.
           </span>
         </div>
       )}
     </div>
   );
 };
+

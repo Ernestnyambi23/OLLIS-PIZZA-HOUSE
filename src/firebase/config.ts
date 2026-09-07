@@ -1,5 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -92,3 +100,36 @@ export async function signOutUser() {
     throw error;
   }
 }
+
+// Helper for Email/Password Sign-In
+export async function signInWithEmail(email: string, pass: string) {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (error) {
+    console.error('[Firebase] Email sign-in error:', error);
+    throw error;
+  }
+}
+
+// Helper for Email/Password Sign-Up
+export async function signUpWithEmail(email: string, pass: string) {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (error) {
+    console.error('[Firebase] Email sign-up error:', error);
+    throw error;
+  }
+}
+
+// Helper for Password Reset
+export async function resetPassword(email: string) {
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (error) {
+    console.error('[Firebase] Password reset error:', error);
+    throw error;
+  }
+}
+

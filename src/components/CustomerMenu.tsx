@@ -19,6 +19,10 @@ import {
   Camera,
   Edit2,
   Image as ImageIcon,
+  Bot,
+  CookingPot,
+  Package,
+  Salad,
 } from 'lucide-react';
 import { MenuItem, CartItem, Variant } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -34,16 +38,21 @@ interface CustomerMenuProps {
   onSelectItemForCustomization: (item: MenuItem) => void;
   onEditDish?: (item: MenuItem) => void;
   onChangeDishImage?: (item: MenuItem) => void;
+  onOpenAiAssistant?: () => void;
 }
 
 const CATEGORIES = [
   'All',
   'Pizza',
+  'Sausages',
   'Burgers & Sandwiches',
-  'Chicken',
-  'Meals & Plates',
-  'Sides & Extras',
-  'Drinks',
+  'Chicken & Meat',
+  'Sides & Snacks',
+  'Soups & Local Meals',
+  'Salads',
+  'Combo Packs & Boxes',
+  'Drinks & Milkshakes',
+  'Groceries & Extras',
 ];
 
 export const CustomerMenu: React.FC<CustomerMenuProps> = ({
@@ -57,6 +66,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
   onSelectItemForCustomization,
   onEditDish,
   onChangeDishImage,
+  onOpenAiAssistant,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -87,14 +97,30 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
   // Helper to render icon for dish
   const renderItemIcon = (category: string) => {
     switch (category) {
+      case 'Sausages':
+        return <Flame className="w-5 h-5 text-[#c2410c]" />;
       case 'Pizza':
         return <Pizza className="w-5 h-5 text-[#1f4d3e]" />;
       case 'Burgers & Sandwiches':
         return <Sandwich className="w-5 h-5 text-[#1f4d3e]" />;
+      case 'Chicken & Meat':
       case 'Chicken':
         return <Drumstick className="w-5 h-5 text-[#1f4d3e]" />;
+      case 'Sides & Snacks':
+      case 'Sides & Extras':
+        return <Utensils className="w-5 h-5 text-[#1f4d3e]" />;
+      case 'Soups & Local Meals':
+        return <CookingPot className="w-5 h-5 text-[#1f4d3e]" />;
+      case 'Salads':
+        return <Salad className="w-5 h-5 text-[#16a34a]" />;
+      case 'Combo Packs & Boxes':
+      case 'Meals & Plates':
+        return <Package className="w-5 h-5 text-[#d97706]" />;
+      case 'Drinks & Milkshakes':
       case 'Drinks':
-        return <CupSoda className="w-5 h-5 text-[#1f4d3e]" />;
+        return <CupSoda className="w-5 h-5 text-[#0284c7]" />;
+      case 'Groceries & Extras':
+        return <ShoppingBag className="w-5 h-5 text-[#7c3aed]" />;
       default:
         return <Utensils className="w-5 h-5 text-[#1f4d3e]" />;
     }
@@ -102,13 +128,44 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
 
   return (
     <div className="space-y-4 pb-20">
+      {/* AI Order Assistant Card */}
+      {onOpenAiAssistant && (
+        <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-[#1f4d3e] to-[#14352b] text-white rounded-2xl shadow-sm border border-emerald-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-emerald-200">
+              <Bot className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold flex items-center gap-1.5">
+                <span>AI Order Assistant</span>
+                <span className="px-1.5 py-0.2 text-[9px] bg-emerald-400 text-black font-extrabold rounded">
+                  NEW MENU
+                </span>
+              </h4>
+              <p className="text-xs text-emerald-100/80">
+                Ask dish questions, prices in TZS, or calculate your order total
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            id="open-ai-assistant-banner-btn"
+            onClick={onOpenAiAssistant}
+            className="px-3 py-1.5 bg-emerald-400 hover:bg-emerald-300 text-black font-bold text-xs rounded-xl shadow-sm transition-all shrink-0 flex items-center gap-1 active:scale-95"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Chat AI</span>
+          </button>
+        </div>
+      )}
+
       {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8b978f]" />
         <input
           type="text"
           id="menu-search-input"
-          placeholder="Search pizzas, burgers, chicken combos..."
+          placeholder="Search pizzas, sausages, chicken, burgers, VIBOX..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-9 pr-9 py-2.5 bg-white border border-[#e2e4dc] rounded-xl text-sm placeholder-[#8b978f] focus:outline-none focus:border-[#1f4d3e] focus:ring-1 focus:ring-[#1f4d3e] transition-all shadow-xs"

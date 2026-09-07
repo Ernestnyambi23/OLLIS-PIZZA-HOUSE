@@ -34,26 +34,30 @@ service cloud.firestore {
       allow write: if isSystemAdmin();
     }
 
+    // Multi-tenant Restaurants
+    match /restaurants/{restaurantId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(restaurantId) && request.resource.data.name is string;
+      allow delete: if isValidId(restaurantId) && isSystemAdmin();
+    }
+
     // Restaurant Settings
     match /settings/{settingId} {
-      allow get: if isValidId(settingId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(settingId) && request.resource.data.restaurantName is string;
       allow delete: if isValidId(settingId) && isSystemAdmin();
     }
 
     // Menu Items
     match /items/{itemId} {
-      allow get: if isValidId(itemId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(itemId) && request.resource.data.name is string && request.resource.data.stock is number;
       allow delete: if isValidId(itemId);
     }
 
     // Orders
     match /orders/{orderId} {
-      allow get: if isValidId(orderId);
-      allow list: if true;
+      allow get, list: if true;
       allow create: if isValidId(orderId) && request.resource.data.customerName is string && request.resource.data.total is number;
       allow update: if isValidId(orderId);
       allow delete: if isValidId(orderId);
@@ -61,56 +65,49 @@ service cloud.firestore {
 
     // Staff Records
     match /staff/{staffId} {
-      allow get: if isValidId(staffId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(staffId) && request.resource.data.name is string;
       allow delete: if isValidId(staffId);
     }
 
     // Hardware Terminals & Devices
     match /devices/{deviceId} {
-      allow get: if isValidId(deviceId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(deviceId) && request.resource.data.name is string;
       allow delete: if isValidId(deviceId);
     }
 
     // Purchases & Procurement
     match /purchases/{purchaseId} {
-      allow get: if isValidId(purchaseId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(purchaseId) && request.resource.data.itemName is string;
       allow delete: if isValidId(purchaseId);
     }
 
     // Capital & Working Finances
     match /capital/{capitalId} {
-      allow get: if isValidId(capitalId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(capitalId) && request.resource.data.amount is number;
       allow delete: if isValidId(capitalId) && isSystemAdmin();
     }
 
     // Business Owners
     match /business_owners/{ownerId} {
-      allow get: if isValidId(ownerId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(ownerId) && request.resource.data.name is string;
       allow delete: if isValidId(ownerId) && isSystemAdmin();
     }
 
     // One-Time Passcodes
     match /otps/{otpId} {
-      allow get: if isValidId(otpId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(otpId) && request.resource.data.code is string;
       allow delete: if isValidId(otpId);
     }
 
     // M-Pesa Transactions
     match /mpesa_transactions/{txId} {
-      allow get: if isValidId(txId);
-      allow list: if true;
+      allow get, list: if true;
       allow create, update: if isValidId(txId) && request.resource.data.amount is number;
       allow delete: if isValidId(txId);
     }

@@ -25,15 +25,22 @@ interface EditItemModalProps {
   onSave: (updatedItem: MenuItem) => void;
   onDelete?: (itemId: string) => void;
   onChangeImage?: (item: MenuItem) => void;
+  restaurantId?: string;
+  restaurantName?: string;
+  existingCategories?: string[];
 }
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   'Pizza',
+  'BBQ & Grills',
   'Burgers & Sandwiches',
-  'Chicken',
-  'Meals & Plates',
-  'Sides & Extras',
-  'Drinks',
+  'Chicken & Meat',
+  'Swahili Seafood',
+  'Curries & Stews',
+  'Sides & Snacks',
+  'Platters & Combos',
+  'Drinks & Milkshakes',
+  'Beverages & Juices',
   'Saturday Special',
 ];
 
@@ -45,9 +52,14 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   onSave,
   onDelete,
   onChangeImage,
+  restaurantId,
+  restaurantName,
+  existingCategories = [],
 }) => {
   const [name, setName] = useState<string>(item.name);
   const [category, setCategory] = useState<string>(item.category || 'Meals & Plates');
+  const [customCategoryInput, setCustomCategoryInput] = useState<string>('');
+  const [isAddingCustomCategory, setIsAddingCustomCategory] = useState<boolean>(false);
   const [stock, setStock] = useState<number>(item.stock);
   const [description, setDescription] = useState<string>(item.description || '');
   const [imageUrl, setImageUrl] = useState<string>(item.imageUrl || '');
@@ -101,11 +113,13 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   }, [item]);
 
   const availableCategories = React.useMemo(() => {
-    if (item.category && !CATEGORIES.includes(item.category)) {
-      return [item.category, ...CATEGORIES];
-    }
-    return CATEGORIES;
-  }, [item.category]);
+    const list = Array.from(new Set([
+      item.category,
+      ...existingCategories.filter(Boolean),
+      ...DEFAULT_CATEGORIES,
+    ].filter(Boolean)));
+    return list;
+  }, [item.category, existingCategories]);
 
   if (isOpen === false) return null;
 
@@ -154,10 +168,15 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
       }
     }
 
+    const finalCategory = isAddingCustomCategory && customCategoryInput.trim()
+      ? customCategoryInput.trim()
+      : category;
+
     const updatedItem: MenuItem = {
       ...item,
+      restaurant_id: item.restaurant_id || restaurantId || 'ollis-pizza',
       name: name.trim(),
-      category,
+      category: finalCategory,
       stock: Math.max(0, Number(stock) || 0),
       description: description.trim() || undefined,
       imageUrl: imageUrl.trim() || undefined,
@@ -184,9 +203,9 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#1b2620]">Edit Dish Details (Admin)</h3>
-              <p className="text-xs text-[#8b978f]">
-                Update dish name, pricing, photo, and stock status
+              <h3 className="text-base font-bold text-[#1b2620]">Edit Dish Details</h3>
+              <p className="text-xs text-[#1f4d3e] font-semibold">
+                {restaurantName ? `Restaurant: ${restaurantName}` : 'Customized Restaurant Dish'}
               </p>
             </div>
           </div>
@@ -354,21 +373,42 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
           </div>
 
           {/* Category & Stock Row */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#4c5a52] mb-1">Category</label>
-              <select
-                id="edit-dish-category-select"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full p-2.5 text-sm bg-white border border-[#e2e4dc] rounded-xl focus:outline-none focus:border-[#1f4d3e]"
-              >
-                {availableCategories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-[#4c5a52]">Category</label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomCategory(!isAddingCustomCategory)}
+                  className="text-[11px] font-bold text-[#1f4d3e] hover:underline"
+                >
+                  {isAddingCustomCategory ? 'Choose Existing' : '+ Custom Category'}
+                </button>
+              </div>
+
+              {isAddingCustomCategory ? (
+                <input
+                  type="text"
+                  placeholder="e.g. Seafood & Soups"
+                  value={customCategoryInput}
+                  onChange={(e) => setCustomCategoryInput(e.target.value)}
+                  className="w-full p-2.5 text-sm bg-white border border-[#1f4d3e] rounded-xl focus:outline-none ring-2 ring-[#1f4d3e]/20"
+                  autoFocus
+                />
+              ) : (
+                <select
+                  id="edit-dish-category-select"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full p-2.5 text-sm bg-white border border-[#e2e4dc] rounded-xl focus:outline-none focus:border-[#1f4d3e]"
+                >
+                  {availableCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>

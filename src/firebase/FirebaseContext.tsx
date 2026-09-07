@@ -1,12 +1,23 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { auth, signInWithGoogle, signOutUser, testFirestoreConnection } from './config';
+import {
+  auth,
+  signInWithGoogle,
+  signOutUser,
+  signInWithEmail,
+  signUpWithEmail,
+  resetPassword,
+  testFirestoreConnection,
+} from './config';
 
 interface FirebaseContextType {
   user: User | null;
   isAuthReady: boolean;
   isOnline: boolean;
   signInWithGoogle: () => Promise<User | null>;
+  signInWithEmail: (email: string, pass: string) => Promise<User | null>;
+  signUpWithEmail: (email: string, pass: string) => Promise<User | null>;
+  resetPassword: (email: string) => Promise<void>;
   signOutUser: () => Promise<void>;
 }
 
@@ -23,9 +34,24 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       setIsOnline(connected);
     });
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
+      if (currentUser) {
+        try {
+          const token = await currentUser.getIdToken();
+          await fetch('/api/users/sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          console.log('[Cloud SQL] User session synchronized with PostgreSQL.');
+        } catch (syncErr) {
+          console.warn('[Cloud SQL] Note: user sync attempted:', syncErr);
+        }
+      }
     });
 
     return () => unsubscribe();
@@ -38,6 +64,9 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         isAuthReady,
         isOnline,
         signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
+        resetPassword,
         signOutUser,
       }}
     >

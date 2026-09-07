@@ -23,6 +23,7 @@ import {
   Capital,
   MpesaTransaction,
   BusinessOwnerAccount,
+  TenantRestaurant,
 } from './types';
 import {
   loadStoredItems,
@@ -51,11 +52,35 @@ import {
   loadStoredAuthUser,
   saveStoredAuthUser,
   clearStoredAuthUser,
+  loadStoredTenants,
+  saveStoredTenants,
+  loadCurrentTenantId,
+  saveCurrentTenantId,
 } from './utils/storage';
+import { tenantAuthService } from './services/tenantAuthService';
 import { generateOrderNumber } from './utils/formatters';
 import { sound } from './utils/sound';
+import {
+  subscribeMenuItems,
+  subscribeOrders,
+  subscribeSettings,
+  subscribeStaff,
+  subscribeDevices,
+  subscribePurchases,
+  subscribeCapital,
+  saveOrderToFirestore,
+  saveMenuItemToFirestore,
+  saveSettingsToFirestore,
+  saveStaffToFirestore,
+  saveDeviceToFirestore,
+  savePurchaseToFirestore,
+  seedRestaurantStarterMenuToFirestore,
+} from './firebase/firestoreService';
+import { getDefaultMenuItemsForTenant } from './data/restaurantMenus';
 
 import { LoginScreen } from './components/LoginScreen';
+import { TenantEntryPortal } from './components/TenantEntryPortal';
+import TenantOnboardingWizard from './components/TenantOnboardingWizard';
 import { TopBar } from './components/TopBar';
 import { CustomerMenu } from './components/CustomerMenu';
 import { OrderReceivedView } from './components/OrderReceivedView';
@@ -76,10 +101,26 @@ import { AppBackground } from './components/AppBackground';
 import { AndroidAppModal } from './components/AndroidAppModal';
 import { SettingsAdminPanel } from './components/SettingsAdminPanel';
 import { DebugDiagnosticsHUD } from './components/DebugDiagnosticsHUD';
+import { AiOrderAssistantModal } from './components/AiOrderAssistantModal';
+import { TenantSwitcherModal } from './components/TenantSwitcherModal';
+import { SuperAdminDashboard } from './components/SuperAdminDashboard';
+import { deleteTenantCascade } from './utils/storage';
 import { triggerHaptic } from './utils/haptics';
 import { initializeThemeColors } from './utils/colorTheme';
 import { UserRole } from './utils/rbac';
-import { Radio, CheckCircle2, ShieldCheck, X } from 'lucide-react';
+import {
+  Radio,
+  CheckCircle2,
+  ShieldCheck,
+  X,
+  Wrench,
+  AlertTriangle,
+  RefreshCw,
+  Sparkles,
+  SlidersHorizontal,
+  LayoutGrid,
+  Check,
+} from 'lucide-react';
 
 export default function App() {
   // Authentication & RBAC Session State (Required Before Access)
@@ -96,6 +137,14 @@ export default function App() {
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [pendingSettingsOpen, setPendingSettingsOpen] = useState<boolean>(false);
+
+  // Multi-Tenant SaaS State & Developer Mode
+  const [tenants, setTenants] = useState<TenantRestaurant[]>(() => loadStoredTenants());
+  const [currentTenantId, setCurrentTenantId] = useState<string>(() => loadCurrentTenantId());
+  const [isTenantSwitcherOpen, setIsTenantSwitcherOpen] = useState<boolean>(false);
+  const [isSuperAdminOpen, setIsSuperAdminOpen] = useState<boolean>(false);
+  const [developerMode, setDeveloperMode] = useState<boolean>(false);
+  const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState<boolean>(false);
 
   // Data State
   const [items, setItems] = useState<MenuItem[]>(() => loadStoredItems());
@@ -120,6 +169,7 @@ export default function App() {
   const [viewingReceiptOrder, setViewingReceiptOrder] = useState<Order | null>(null);
   const [isNewItemModalOpen, setIsNewItemModalOpen] = useState<boolean>(false);
   const [isAndroidModalOpen, setIsAndroidModalOpen] = useState<boolean>(false);
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
   const [newDeviceAlertToast, setNewDeviceAlertToast] = useState<{ id: string; name: string; pairingCode?: string } | null>(null);
@@ -169,6 +219,62 @@ export default function App() {
     window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  // Real-time Firestore synchronization across all network devices & Cloud
+  useEffect(() => {
+    const unsubSettings = subscribeSettings((remoteSettings) => {
+      if (remoteSettings && Object.keys(remoteSettings).length > 0) {
+        setSettings((prev) => ({ ...prev, ...remoteSettings }));
+      }
+    });
+
+    const unsubItems = subscribeMenuItems((remoteItems) => {
+      if (remoteItems && remoteItems.length > 0) {
+        setItems(remoteItems);
+      }
+    });
+
+    const unsubOrders = subscribeOrders((remoteOrders) => {
+      if (remoteOrders && remoteOrders.length > 0) {
+        setOrders(remoteOrders);
+      }
+    });
+
+    const unsubStaff = subscribeStaff((remoteStaff) => {
+      if (remoteStaff && remoteStaff.length > 0) {
+        setStaffList(remoteStaff);
+      }
+    });
+
+    const unsubDevices = subscribeDevices((remoteDevices) => {
+      if (remoteDevices && remoteDevices.length > 0) {
+        const curId = getCurrentDeviceId();
+        setDevices(remoteDevices.map((d) => ({ ...d, isCurrent: d.id === curId })));
+      }
+    });
+
+    const unsubPurchases = subscribePurchases((remotePurchases) => {
+      if (remotePurchases && remotePurchases.length > 0) {
+        setPurchases(remotePurchases);
+      }
+    });
+
+    const unsubCapital = subscribeCapital((remoteCapital) => {
+      if (remoteCapital && typeof remoteCapital.amount === 'number') {
+        setCapital(remoteCapital);
+      }
+    });
+
+    return () => {
+      unsubSettings();
+      unsubItems();
+      unsubOrders();
+      unsubStaff();
+      unsubDevices();
+      unsubPurchases();
+      unsubCapital();
     };
   }, []);
 
@@ -222,6 +328,100 @@ export default function App() {
   useEffect(() => {
     saveStoredMpesaTransactions(mpesaTransactions);
   }, [mpesaTransactions]);
+
+  // Multi-Tenant SaaS Lifecycle: fetch remote tenants on startup & sync
+  useEffect(() => {
+    tenantAuthService.fetchTenants().then((list) => {
+      if (list && list.length > 0) {
+        setTenants(list);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    saveStoredTenants(tenants);
+  }, [tenants]);
+
+  // Handle switching active restaurant tenant
+  const handleSelectTenant = (selectedTenant: TenantRestaurant) => {
+    setCurrentTenantId(selectedTenant.id);
+    saveCurrentTenantId(selectedTenant.id);
+
+    // Update active branding settings
+    setSettings((prev) => ({
+      ...prev,
+      restaurantName: selectedTenant.name,
+      tagline: selectedTenant.tagline,
+      currency: selectedTenant.currency,
+      phone: selectedTenant.phone || prev.phone,
+      address: selectedTenant.address || prev.address,
+    }));
+
+    // Scope check: If current user is staff/owner of another restaurant, warn or align
+    if (authUser && authUser.role !== UserRole.DEVELOPER && authUser.restaurant_id && authUser.restaurant_id !== 'ALL') {
+      if (authUser.restaurant_id !== selectedTenant.id) {
+        console.warn(`User is scoped to ${authUser.restaurant_id}, switched view to ${selectedTenant.id}`);
+      }
+    }
+
+    sound.playSuccess();
+    triggerHaptic('medium');
+  };
+
+  const handleRefreshTenants = async () => {
+    const list = await tenantAuthService.fetchTenants();
+    setTenants(list);
+  };
+
+  const handleToggleTenantMaintenance = async (tenantId: string, isUnderMaintenance: boolean) => {
+    setTenants((prev) =>
+      prev.map((t) => (t.id === tenantId ? { ...t, isUnderMaintenance, updatedAt: Date.now() } : t))
+    );
+    try {
+      await fetch(`/api/tenants/${tenantId}/maintenance`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isUnderMaintenance }),
+      });
+    } catch (err) {
+      console.error('Failed to sync maintenance toggle with backend:', err);
+    }
+  };
+
+  const handleDeleteTenant = async (tenantId: string) => {
+    const remaining = deleteTenantCascade(tenantId);
+    setTenants(remaining);
+    if (currentTenantId === tenantId && remaining.length > 0) {
+      handleSelectTenant(remaining[0]);
+    }
+    try {
+      await fetch(`/api/tenants/${tenantId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to sync delete tenant with backend:', err);
+    }
+  };
+
+  const handleInlineUpdateTenant = (updates: { name?: string; tagline?: string }) => {
+    const active = tenants.find((t) => t.id === currentTenantId);
+    if (!active) return;
+    const updated: TenantRestaurant = {
+      ...active,
+      name: updates.name ?? active.name,
+      tagline: updates.tagline ?? active.tagline,
+      updatedAt: Date.now(),
+    };
+    setTenants((prev) => prev.map((t) => (t.id === currentTenantId ? updated : t)));
+    setSettings((prev) => ({
+      ...prev,
+      restaurantName: updated.name,
+      tagline: updated.tagline,
+    }));
+    fetch('/api/tenants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    }).catch(() => {});
+  };
 
   // Keep an active interval for live timer updates
   const [, setTick] = useState<number>(0);
@@ -750,6 +950,7 @@ export default function App() {
           unitPrice,
           quantity: 1,
           specialInstructions,
+          restaurant_id: currentTenantId,
         },
       ];
     });
@@ -794,6 +995,7 @@ export default function App() {
     const isPaidInit = payload.paymentMethod !== 'cash';
     const newOrder: Order = {
       id: `ord-${Date.now()}`,
+      restaurant_id: currentTenantId,
       orderNumber: newOrderNumber,
       customerName: payload.customerName,
       phone: payload.phone || undefined,
@@ -838,6 +1040,34 @@ export default function App() {
 
     // Add to orders list
     setOrders((prev) => [newOrder, ...prev]);
+
+    // Save to Firestore & Cloud SQL
+    saveOrderToFirestore(newOrder);
+    fetch('/api/db/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: newOrder.id,
+        orderNumber: newOrder.orderNumber,
+        customerName: newOrder.customerName,
+        phone: newOrder.phone || '',
+        orderType: newOrder.orderType,
+        tableNumber: newOrder.tableNumber || '',
+        subtotal: Math.round(newOrder.subtotal),
+        tax: Math.round(newOrder.tax),
+        deliveryFee: Math.round(newOrder.deliveryFee),
+        total: Math.round(newOrder.total),
+        paidAmount: Math.round(newOrder.paidAmount),
+        debtAmount: Math.round(newOrder.debtAmount),
+        isPaid: newOrder.isPaid,
+        isCompleted: newOrder.isCompleted,
+        paymentMethod: newOrder.paymentMethod,
+        paymentStatus: newOrder.paymentStatus,
+        status: newOrder.status,
+        source: newOrder.source || 'Bar Terminal',
+        estimatedPrepMinutes: newOrder.estimatedPrepMinutes || 20,
+      }),
+    }).catch(() => {});
 
     // Clear cart & close cart drawer
     setCart([]);
@@ -904,7 +1134,7 @@ export default function App() {
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.id !== orderId) return ord;
-        return {
+        const updatedOrder: Order = {
           ...ord,
           status: newStatus,
           updatedAt: Date.now(),
@@ -915,6 +1145,33 @@ export default function App() {
               ? 'paid'
               : ord.paymentStatus,
         };
+        saveOrderToFirestore(updatedOrder);
+        fetch('/api/db/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: updatedOrder.id,
+            orderNumber: updatedOrder.orderNumber,
+            customerName: updatedOrder.customerName,
+            phone: updatedOrder.phone || '',
+            orderType: updatedOrder.orderType,
+            tableNumber: updatedOrder.tableNumber || '',
+            subtotal: Math.round(updatedOrder.subtotal),
+            tax: Math.round(updatedOrder.tax),
+            deliveryFee: Math.round(updatedOrder.deliveryFee),
+            total: Math.round(updatedOrder.total),
+            paidAmount: Math.round(updatedOrder.paidAmount),
+            debtAmount: Math.round(updatedOrder.debtAmount),
+            isPaid: updatedOrder.isPaid,
+            isCompleted: updatedOrder.isCompleted,
+            paymentMethod: updatedOrder.paymentMethod,
+            paymentStatus: updatedOrder.paymentStatus,
+            status: updatedOrder.status,
+            source: updatedOrder.source || 'Bar Terminal',
+            estimatedPrepMinutes: updatedOrder.estimatedPrepMinutes || 20,
+          }),
+        }).catch(() => {});
+        return updatedOrder;
       })
     );
   };
@@ -1020,15 +1277,36 @@ export default function App() {
   };
 
   const handleAddNewItem = (newItem: MenuItem) => {
-    setItems((prev) => [newItem, ...prev]);
+    const itemWithTenant: MenuItem = {
+      ...newItem,
+      restaurant_id: newItem.restaurant_id || currentTenantId,
+    };
+    setItems((prev) => [itemWithTenant, ...prev]);
+    saveMenuItemToFirestore(itemWithTenant).catch(() => {});
     sound.playSuccess();
     triggerHaptic('success');
   };
 
   const handleUpdateItem = (updatedItem: MenuItem) => {
+    const itemWithTenant: MenuItem = {
+      ...updatedItem,
+      restaurant_id: updatedItem.restaurant_id || currentTenantId,
+    };
     setItems((prev) =>
-      prev.map((i) => (i.id === updatedItem.id ? updatedItem : i))
+      prev.map((i) => (i.id === itemWithTenant.id ? itemWithTenant : i))
     );
+    saveMenuItemToFirestore(itemWithTenant).catch(() => {});
+    sound.playSuccess();
+    triggerHaptic('success');
+  };
+
+  const handleSeedTenantMenu = (tenantId: string) => {
+    const starterItems = getDefaultMenuItemsForTenant(tenantId);
+    setItems((prev) => {
+      const others = prev.filter((i) => (i.restaurant_id || 'ollis-pizza') !== tenantId);
+      return [...starterItems, ...others];
+    });
+    seedRestaurantStarterMenuToFirestore(tenantId).catch(() => {});
     sound.playSuccess();
     triggerHaptic('success');
   };
@@ -1065,9 +1343,7 @@ export default function App() {
   };
 
   const handleDeleteItem = (itemId: string) => {
-    if (window.confirm('Remove this item from the active menu?')) {
-      setItems((prev) => prev.filter((i) => i.id !== itemId));
-    }
+    setItems((prev) => prev.filter((i) => i.id !== itemId));
   };
 
   const handleUpdateSettings = (newSettings: Partial<RestaurantSettings>) => {
@@ -1083,22 +1359,153 @@ export default function App() {
     setCart([]);
   };
 
-  // Counts for Badges
-  const activeOrdersCount = orders.filter(
+  // Active tenant scoping
+  const activeTenant = tenants.find((t) => t.id === currentTenantId) || tenants[0];
+  const isMaintenanceLocked = Boolean(activeTenant?.isUnderMaintenance) && currentRole !== UserRole.DEVELOPER;
+
+  // Strict multi-tenant data partitions
+  const tenantItems = React.useMemo(() => {
+    const list = items.filter((i) => (i.restaurant_id || 'ollis-pizza') === currentTenantId);
+    if (list.length === 0 && currentTenantId) {
+      return getDefaultMenuItemsForTenant(currentTenantId);
+    }
+    return list;
+  }, [items, currentTenantId]);
+
+  const tenantOrders = React.useMemo(() => {
+    return orders.filter((o) => (o.restaurant_id || 'ollis-pizza') === currentTenantId);
+  }, [orders, currentTenantId]);
+
+  const tenantStaff = React.useMemo(() => {
+    return staffList.filter((s) => (s.restaurant_id || 'ollis-pizza') === currentTenantId);
+  }, [staffList, currentTenantId]);
+
+  const tenantDevices = React.useMemo(() => {
+    return devices.filter((d) => (d.restaurant_id || 'ollis-pizza') === currentTenantId);
+  }, [devices, currentTenantId]);
+
+  const tenantPurchases = React.useMemo(() => {
+    return purchases.filter((p) => (p.restaurant_id || 'ollis-pizza') === currentTenantId);
+  }, [purchases, currentTenantId]);
+
+  // Counts for Badges scoped to current tenant
+  const activeOrdersCount = tenantOrders.filter(
     (o) => o.status === 'pending' || o.status === 'preparing' || o.status === 'ready'
   ).length;
-  const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
+  const completedOrdersCount = tenantOrders.filter((o) => o.status === 'completed').length;
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
-  // STRICT ACCESS CONTROL: Require login before accessing application
+  // STRICT ACCESS CONTROL: Tenant Entry Portal & Verification
   if (!authUser) {
+    if (isOnboardingWizardOpen) {
+      return (
+        <div className="min-h-screen bg-slate-950 py-10 px-4 flex items-center justify-center">
+          <div className="w-full max-w-4xl">
+            <TenantOnboardingWizard
+              onTenantCreated={async (newTenant) => {
+                await handleRefreshTenants();
+                handleSelectTenant(newTenant);
+                setIsOnboardingWizardOpen(false);
+              }}
+              onClose={() => setIsOnboardingWizardOpen(false)}
+            />
+          </div>
+        </div>
+      );
+    }
     return (
-      <LoginScreen
+      <TenantEntryPortal
+        currentTenant={activeTenant}
+        onSelectTenant={handleSelectTenant}
+        onLoginSuccess={(user, tenant) => {
+          handleSelectTenant(tenant);
+          handleLoginSuccess(user);
+        }}
         settings={settings}
         staffList={staffList}
         businessOwners={businessOwners}
-        onLoginSuccess={handleLoginSuccess}
+        tenants={tenants}
+        onOpenOnboardingWizard={() => setIsOnboardingWizardOpen(true)}
       />
+    );
+  }
+
+  // MAINTENANCE LOCK SHIELD: If tenant is locked by Super Admin
+  if (isMaintenanceLocked) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 relative">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl text-center relative overflow-hidden">
+          <div className="absolute -top-12 -right-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl" />
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-6">
+            <Wrench className="w-8 h-8 animate-spin" />
+          </div>
+
+          <div className="text-[11px] font-black uppercase tracking-widest text-amber-400 mb-1">
+            ENH RESTAURANT MANAGEMENT AIDE LTD.
+          </div>
+          <h2 className="text-xl font-black text-white tracking-tight mb-2">
+            Tenant Under Scheduled Maintenance
+          </h2>
+          <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+            <strong className="text-slate-200">{activeTenant.name}</strong> ({activeTenant.uniqueCode || 'REST-????'}) has been temporarily locked by the platform administrator for database schema migration and security synchronization.
+          </p>
+
+          <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/60 mb-6 text-left text-xs space-y-2">
+            <div className="flex items-center justify-between text-slate-300 font-medium">
+              <span>Database Scoping</span>
+              <span className="text-emerald-400 font-mono font-bold">Partition Locked</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-300 font-medium">
+              <span>Branch</span>
+              <span className="text-slate-200">{activeTenant.branchName || 'Main Branch'}</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-300 font-medium">
+              <span>Live Terminal Service</span>
+              <span className="text-amber-400 font-bold">Queued for Sync</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => handleRefreshTenants()}
+              className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Re-check Terminal Status
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsAdminAuthModalOpen(true);
+              }}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs rounded-xl border border-slate-700 transition flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              Developer / Root Admin Bypass
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full py-2 text-slate-500 hover:text-slate-300 text-xs transition"
+            >
+              Log Out & Switch Tenant Code
+            </button>
+          </div>
+        </div>
+
+        <AdminAuthModal
+          isOpen={isAdminAuthModalOpen}
+          onClose={() => setIsAdminAuthModalOpen(false)}
+          onSuccess={handleAdminAuthSuccess}
+          correctPassword={settings.adminPassword}
+          ownerName={settings.ownerName}
+          currentRole={currentRole}
+          businessOwners={businessOwners}
+        />
+      </div>
     );
   }
 
@@ -1212,101 +1619,196 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAndroidAppModal={() => setIsAndroidModalOpen(true)}
         onOpenSettings={handleOpenSettingsPanel}
+        onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
+        onOpenTenantSwitcher={() => setIsTenantSwitcherOpen(true)}
+        onOpenSuperAdmin={() => setIsSuperAdminOpen(true)}
         pendingDevicesCount={pendingDevicesCount}
         language={settings.language || 'en'}
         hideAdminFromNav={settings.hideAdminFromNav}
+        isDeveloper={currentRole === UserRole.DEVELOPER}
+        developerMode={developerMode}
+        onToggleDeveloperMode={() => setDeveloperMode((v) => !v)}
+        onInlineUpdateTenant={handleInlineUpdateTenant}
+        tenants={tenants}
+        currentTenantId={currentTenantId}
+        onSelectTenant={handleSelectTenant}
       />
 
       {/* Main Bar Screen Area */}
-      <main className="flex-1 max-w-2xl w-full mx-auto p-4 sm:p-5 relative z-10">
-        {/* 1. ORDER SECTION */}
-        {(currentTab === 'order' || currentTab === 'menu') && (
-          <CustomerMenu
+      <main className={`flex-1 w-full mx-auto p-4 sm:p-5 relative z-10 ${isSuperAdminOpen && currentRole === UserRole.DEVELOPER ? 'max-w-6xl' : 'max-w-2xl'}`}>
+        {/* DEVELOPER MODE ACTIVE OVERLAY BANNER */}
+        {developerMode && currentRole === UserRole.DEVELOPER && (
+          <div className="mb-4 bg-slate-900 border-2 border-emerald-500 text-white rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                <Wrench className="w-4 h-4 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                    DEVELOPER OVERLAY ACTIVE
+                  </span>
+                  <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/40">
+                    {activeTenant?.uniqueCode || 'REST-????'} • {activeTenant?.name}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                  Inline content editing active on restaurant brand labels. Layout positioning mode ready.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() =>
+                  handleToggleTenantMaintenance(
+                    currentTenantId,
+                    !activeTenant?.isUnderMaintenance
+                  )
+                }
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                  activeTenant?.isUnderMaintenance
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md animate-pulse'
+                    : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>
+                  {activeTenant?.isUnderMaintenance ? 'Unlock Maintenance' : 'Lock Maintenance'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSuperAdminOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>SaaS Dashboard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeveloperMode(false)}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Exit Dev Mode
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SUPER-ADMIN SAAS PORTAL VIEW FOR DEVELOPER */}
+        {isSuperAdminOpen && currentRole === UserRole.DEVELOPER ? (
+          <SuperAdminDashboard
+            tenants={tenants}
+            currentTenantId={currentTenantId}
+            onSelectTenant={handleSelectTenant}
+            onRefreshTenants={handleRefreshTenants}
+            currentUser={authUser}
+            onClose={() => setIsSuperAdminOpen(false)}
             items={items}
-            cart={cart}
-            currency={settings.currency}
-            isAdminUnlocked={isAdminUnlocked && (currentRole === UserRole.OWNER || currentRole === UserRole.DEVELOPER)}
-            onAddToCart={handleAddToCart}
-            onUpdateCartQuantity={handleUpdateCartQuantity}
-            onOpenCart={() => setIsCartOpen(true)}
-            onSelectItemForCustomization={(item) => setCustomizingItem(item)}
-            onEditDish={(item) => setEditingItem(item)}
-            onChangeDishImage={(item) => setPickingImageItem(item)}
-          />
-        )}
-
-        {/* 2. ORDER RECEIVED SECTION (WITH TICK BOX) */}
-        {(currentTab === 'order_received' || currentTab === 'orders') && (
-          <OrderReceivedView
-            orders={orders}
-            settings={settings}
-            onUpdateOrderStatus={handleUpdateOrderStatus}
-            onToggleItemCheck={handleToggleItemCheck}
-            onBatchUpdateStatus={handleBatchUpdateStatus}
-            onViewReceipt={(order) => setViewingReceiptOrder(order)}
-            onCreateWalkInOrder={() => {
-              setCurrentTab('order');
-              setIsCartOpen(true);
-            }}
-          />
-        )}
-
-        {/* 3. ORDER COMPLETED SECTION */}
-        {currentTab === 'order_completed' && (
-          <OrderCompletedView
-            orders={orders}
-            settings={settings}
-            onViewReceipt={(order) => setViewingReceiptOrder(order)}
-            onUpdateOrderSettlement={handleUpdateOrderSettlement}
-          />
-        )}
-
-        {/* 4. ADMIN SECTION */}
-        {currentTab === 'admin' && (
-          <AdminView
-            devices={devices}
-            settings={settings}
-            items={items}
-            orders={orders}
-            purchases={purchases}
-            capital={capital}
-            mpesaTransactions={mpesaTransactions}
-            staffList={staffList}
-            businessOwners={businessOwners}
-            onAddStaff={handleAddStaff}
-            onUpdateStaff={handleUpdateStaff}
-            onDeleteStaff={handleDeleteStaff}
-            onAddBusinessOwner={handleAddBusinessOwner}
-            onUpdateBusinessOwner={handleUpdateBusinessOwner}
-            onDeleteBusinessOwner={handleDeleteBusinessOwner}
-            onAddPurchase={handleAddPurchase}
-            onDeletePurchase={handleDeletePurchase}
-            onUpdateCapital={handleUpdateCapital}
-            currentRole={currentRole}
-            onSwitchRole={handleSwitchRole}
-            onToggleDeviceStatus={handleToggleDeviceStatus}
-            onApproveDevice={handleApproveDevice}
-            onRejectDevice={handleRejectDevice}
-            onSimulatePendingAndroidDevice={handleSimulatePendingAndroidDevice}
-            onAddNewDevice={handleAddNewDevice}
-            onDeleteDevice={handleDeleteDevice}
-            onDisableAllRemoteDevices={handleDisableAllRemoteDevices}
-            onEnableAllDevices={handleEnableAllDevices}
-            onToggleDeviceControlFunction={handleToggleDeviceControlFunction}
-            onUpdateSettings={handleUpdateSettings}
-            onUpdateStock={handleUpdateStock}
-            onUpdatePrice={handleUpdatePrice}
-            onAddNewItem={() => setIsNewItemModalOpen(true)}
+            onAddNewItem={handleAddNewItem}
+            onUpdateItem={handleUpdateItem}
             onDeleteItem={handleDeleteItem}
-            onEditItem={(item) => setEditingItem(item)}
-            onChangeDishImage={(item) => setPickingImageItem(item)}
-            onResetData={handleResetData}
-            onResetReport={handleResetReport}
-            onResetAllReports={handleResetAllReports}
-            onLockAdmin={handleLockAdmin}
-            onOpenAndroidAppModal={() => setIsAndroidModalOpen(true)}
-            onOpenSettings={handleOpenSettingsPanel}
+            onSeedTenantMenu={handleSeedTenantMenu}
+            onDeleteTenant={handleDeleteTenant}
+            onToggleTenantMaintenance={handleToggleTenantMaintenance}
           />
+        ) : (
+          <>
+            {/* 1. ORDER SECTION */}
+            {(currentTab === 'order' || currentTab === 'menu') && (
+              <CustomerMenu
+                items={tenantItems}
+                cart={cart}
+                currency={settings.currency}
+                isAdminUnlocked={isAdminUnlocked && (currentRole === UserRole.OWNER || currentRole === UserRole.DEVELOPER)}
+                onAddToCart={handleAddToCart}
+                onUpdateCartQuantity={handleUpdateCartQuantity}
+                onOpenCart={() => setIsCartOpen(true)}
+                onSelectItemForCustomization={(item) => setCustomizingItem(item)}
+                onEditDish={(item) => setEditingItem(item)}
+                onChangeDishImage={(item) => setPickingImageItem(item)}
+                onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
+              />
+            )}
+
+            {/* 2. ORDER RECEIVED SECTION (WITH TICK BOX) */}
+            {(currentTab === 'order_received' || currentTab === 'orders') && (
+              <OrderReceivedView
+                orders={tenantOrders}
+                settings={settings}
+                onUpdateOrderStatus={handleUpdateOrderStatus}
+                onToggleItemCheck={handleToggleItemCheck}
+                onBatchUpdateStatus={handleBatchUpdateStatus}
+                onViewReceipt={(order) => setViewingReceiptOrder(order)}
+                onCreateWalkInOrder={() => {
+                  setCurrentTab('order');
+                  setIsCartOpen(true);
+                }}
+              />
+            )}
+
+            {/* 3. ORDER COMPLETED SECTION */}
+            {currentTab === 'order_completed' && (
+              <OrderCompletedView
+                orders={tenantOrders}
+                settings={settings}
+                onViewReceipt={(order) => setViewingReceiptOrder(order)}
+                onUpdateOrderSettlement={handleUpdateOrderSettlement}
+              />
+            )}
+
+            {/* 4. ADMIN SECTION */}
+            {currentTab === 'admin' && (
+              <AdminView
+                devices={tenantDevices}
+                settings={settings}
+                items={tenantItems}
+                orders={tenantOrders}
+                purchases={tenantPurchases}
+                capital={capital}
+                mpesaTransactions={mpesaTransactions}
+                staffList={tenantStaff}
+                businessOwners={businessOwners}
+                onAddStaff={handleAddStaff}
+                onUpdateStaff={handleUpdateStaff}
+                onDeleteStaff={handleDeleteStaff}
+                onAddBusinessOwner={handleAddBusinessOwner}
+                onUpdateBusinessOwner={handleUpdateBusinessOwner}
+                onDeleteBusinessOwner={handleDeleteBusinessOwner}
+                onAddPurchase={handleAddPurchase}
+                onDeletePurchase={handleDeletePurchase}
+                onUpdateCapital={handleUpdateCapital}
+                currentRole={currentRole}
+                onSwitchRole={handleSwitchRole}
+                onToggleDeviceStatus={handleToggleDeviceStatus}
+                onApproveDevice={handleApproveDevice}
+                onRejectDevice={handleRejectDevice}
+                onSimulatePendingAndroidDevice={handleSimulatePendingAndroidDevice}
+                onAddNewDevice={handleAddNewDevice}
+                onDeleteDevice={handleDeleteDevice}
+                onDisableAllRemoteDevices={handleDisableAllRemoteDevices}
+                onEnableAllDevices={handleEnableAllDevices}
+                onToggleDeviceControlFunction={handleToggleDeviceControlFunction}
+                onUpdateSettings={handleUpdateSettings}
+                onUpdateStock={handleUpdateStock}
+                onUpdatePrice={handleUpdatePrice}
+                onAddNewItem={() => setIsNewItemModalOpen(true)}
+                onDeleteItem={handleDeleteItem}
+                onEditItem={(item) => setEditingItem(item)}
+                onChangeDishImage={(item) => setPickingImageItem(item)}
+                onResetData={handleResetData}
+                onResetReport={handleResetReport}
+                onResetAllReports={handleResetAllReports}
+                onLockAdmin={handleLockAdmin}
+                onOpenAndroidAppModal={() => setIsAndroidModalOpen(true)}
+                onOpenSettings={handleOpenSettingsPanel}
+              />
+            )}
+          </>
         )}
       </main>
 
@@ -1496,6 +1998,31 @@ export default function App() {
           }}
         />
       )}
+
+      {/* AI Order Assistant Modal (Powered by Gemini & updated Menu Database) */}
+      <AiOrderAssistantModal
+        isOpen={isAiAssistantOpen}
+        onClose={() => setIsAiAssistantOpen(false)}
+        currency={settings.currency}
+        menuItems={items}
+        onAddToCart={(item, qty, variant) => {
+          handleAddToCart(item, variant);
+          sound.playSuccess();
+        }}
+      />
+
+      {/* Multi-Tenant Restaurant Switcher Modal */}
+      <TenantSwitcherModal
+        isOpen={isTenantSwitcherOpen}
+        onClose={() => setIsTenantSwitcherOpen(false)}
+        tenants={tenants}
+        currentTenantId={currentTenantId}
+        onSelectTenant={handleSelectTenant}
+        currentUser={authUser}
+        onOpenSuperAdmin={() => {
+          setIsSuperAdminOpen(true);
+        }}
+      />
 
       {/* Floating Debug Diagnostics HUD (When debugModeEnabled is toggled in Unified Settings) */}
       <DebugDiagnosticsHUD

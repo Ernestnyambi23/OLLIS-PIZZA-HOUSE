@@ -34,12 +34,20 @@ export type TabType =
 
 export type Category =
   | 'All'
+  | 'Pizza'
+  | 'Sausages'
+  | 'Burgers & Sandwiches'
+  | 'Chicken & Meat'
+  | 'Sides & Snacks'
+  | 'Soups & Local Meals'
+  | 'Salads'
+  | 'Combo Packs & Boxes'
+  | 'Drinks & Milkshakes'
+  | 'Groceries & Extras'
   | 'Main'
   | 'Snacks'
   | 'Beverages'
   | 'Saturday Special'
-  | 'Pizza'
-  | 'Burgers & Sandwiches'
   | 'Chicken'
   | 'Meals & Plates'
   | 'Sides & Extras'
@@ -62,8 +70,46 @@ export interface Variant {
   price: number; // in TZS / Tsh
 }
 
+export interface TenantFeatureFlags {
+  onlinePayments: boolean; // M-Pesa / Tigo / Airtel STK push
+  aiOrderAssistant: boolean; // Gemini AI Assistant
+  smsReceipts: boolean; // SMS & WhatsApp order confirmations
+  staffPayroll: boolean; // Monthly salary & attendance calculator
+  autoPushTill: boolean; // Auto STK push at checkout
+  kitchenDisplay: boolean; // Real-time kitchen tick box queue
+  inventoryTracking: boolean; // Ingredient & stock deductions
+}
+
+export interface TenantRestaurant {
+  id: string; // restaurant_id
+  uniqueCode: string; // e.g. "REST-9021" - Unique Tenant Access Code
+  name: string;
+  slug: string;
+  tagline: string;
+  currency: string;
+  logoUrl?: string;
+  themeColor: string;
+  status: 'active' | 'suspended' | 'trial';
+  ownerEmail: string;
+  ownerName: string;
+  ownerId?: string; // Links Owner Account to multiple branches/tenants
+  branchName?: string; // e.g. "Main Branch" or "Downtown Branch"
+  categories?: string[];
+  paymentMethods?: string[];
+  phone: string;
+  address: string;
+  featureFlags: TenantFeatureFlags;
+  isUnderMaintenance?: boolean; // Global or per-tenant maintenance lock
+  maintenanceMessage?: string;
+  layoutConfig?: Record<string, any>; // Developer drag-and-drop component positioning
+  customCss?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface MenuItem {
   id: string;
+  restaurant_id?: string; // Multi-tenant row scoping
   name: string;
   category: string;
   stock: number;
@@ -83,6 +129,7 @@ export interface MenuItem {
 export interface CartItem {
   id: string; // unique item id + variant label
   menuItemId: string;
+  restaurant_id?: string;
   name: string;
   category: string;
   variantLabel?: string;
@@ -94,6 +141,7 @@ export interface CartItem {
 
 export interface Order {
   id: string;
+  restaurant_id?: string; // Multi-tenant row scoping (e.g. 'ollis-pizza')
   orderNumber: string; // e.g. "2026-08-31-001" or "#1042"
   orderDate?: string; // YYYY-MM-DD
   orderSequence?: number;
@@ -146,6 +194,7 @@ export interface Order {
 
 export interface Purchase {
   id: string;
+  restaurant_id?: string;
   itemName: string;
   quantity: number;
   pricePerUnit: number;
@@ -210,6 +259,7 @@ export interface CustomerRecord {
 
 export interface ConnectedDevice {
   id: string;
+  restaurant_id?: string;
   name: string;
   deviceType: 'pos' | 'kitchen_display' | 'kiosk' | 'waiter_phone' | 'manager_laptop';
   assignedLocation: string;
@@ -225,6 +275,7 @@ export interface ConnectedDevice {
 
 export interface StaffMember {
   id: string;
+  restaurant_id?: string;
   name: string;
   username?: string; // staff username to login to the app
   password?: string; // staff login password / access passcode
@@ -280,10 +331,13 @@ export interface AuthUser {
   username: string;
   name: string;
   role: UserRole;
+  restaurant_id: string; // "ALL" for Developer/Super Admin, or specific tenant e.g. "ollis-pizza"
   businessId: string | null;
+  email?: string;
   avatar?: string;
   token?: string;
   lastLoginAt: number;
+  permissions?: string[];
 }
 
 export interface BusinessOwnerAccount {

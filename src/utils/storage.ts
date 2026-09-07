@@ -12,6 +12,7 @@ import {
   MpesaTransaction,
   NotificationItem,
   AuthUser,
+  TenantRestaurant,
 } from '../types';
 import {
   DEFAULT_SETTINGS,
@@ -27,9 +28,110 @@ import {
   INITIAL_MPESA_TRANSACTIONS,
   INITIAL_NOTIFICATIONS,
 } from '../data/initialData';
+import {
+  SAFARI_BISTRO_MENU,
+  ZANZIBAR_SPICE_MENU,
+  getDefaultMenuItemsForTenant,
+} from '../data/restaurantMenus';
+
+export const INITIAL_TENANTS_LIST: TenantRestaurant[] = [
+  {
+    id: 'ollis-pizza',
+    uniqueCode: 'REST-9021',
+    name: "Olli's Pizza House & Take Aways",
+    slug: 'ollis-pizza',
+    branchName: 'Main Branch',
+    ownerId: 'owner_ernest_001',
+    tagline: 'Best Pizza & Sizzling Viennas in Dar es Salaam',
+    currency: 'TZS',
+    logoUrl: '/logo.jpg',
+    themeColor: '#1f4d3e',
+    status: 'active',
+    ownerEmail: 'ernestnyambi23@gmail.com',
+    ownerName: 'Ernest Nyambi',
+    phone: '+255 754 123 456',
+    address: 'Posta Mpya, Dar es Salaam, Tanzania',
+    categories: ['Pizza', 'Sausages', 'Burgers & Sandwiches', 'Chicken & Meat', 'Drinks & Milkshakes'],
+    paymentMethods: ['Cash', 'M-Pesa', 'Card', 'Selcom'],
+    isUnderMaintenance: false,
+    featureFlags: {
+      onlinePayments: true,
+      aiOrderAssistant: true,
+      smsReceipts: true,
+      staffPayroll: true,
+      autoPushTill: true,
+      kitchenDisplay: true,
+      inventoryTracking: true,
+    },
+    createdAt: 1725148800000,
+    updatedAt: Date.now(),
+  },
+  {
+    id: 'safari-bistro',
+    uniqueCode: 'REST-4421',
+    name: 'Safari Bistro & Grill',
+    slug: 'safari-bistro',
+    branchName: 'Arusha Clocktower',
+    ownerId: 'owner_juma_002',
+    tagline: 'Authentic African BBQ & Savory Skewers',
+    currency: 'TZS',
+    logoUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&q=80',
+    themeColor: '#b45309',
+    status: 'active',
+    ownerEmail: 'safari_owner@example.com',
+    ownerName: 'Juma Mwakipesile',
+    phone: '+255 789 443 211',
+    address: 'Clocktower Roundabout, Arusha, Tanzania',
+    categories: ['African BBQ', 'Skewers', 'Plates', 'Sides', 'Beverages'],
+    paymentMethods: ['Cash', 'M-Pesa'],
+    isUnderMaintenance: false,
+    featureFlags: {
+      onlinePayments: true,
+      aiOrderAssistant: false, // Feature disabled for Restaurant B
+      smsReceipts: false,
+      staffPayroll: true,
+      autoPushTill: false,
+      kitchenDisplay: true,
+      inventoryTracking: false,
+    },
+    createdAt: 1725235200000,
+    updatedAt: Date.now(),
+  },
+  {
+    id: 'zanzibar-spice',
+    uniqueCode: 'REST-7712',
+    name: 'Zanzibar Spice & Seafood Port',
+    slug: 'zanzibar-spice',
+    branchName: 'Stone Town Seafront',
+    ownerId: 'owner_amina_003',
+    tagline: 'Oceanfront Swahili Spices & Fresh Catch',
+    currency: 'TZS',
+    logoUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
+    themeColor: '#0284c7',
+    status: 'active',
+    ownerEmail: 'spice_zanzibar@example.com',
+    ownerName: 'Amina Khamis',
+    phone: '+255 777 982 301',
+    address: 'Forodhani Gardens, Stone Town, Zanzibar',
+    categories: ['Seafood', 'Swahili Curries', 'Sides', 'Tropical Juices'],
+    paymentMethods: ['Cash', 'M-Pesa', 'Card'],
+    isUnderMaintenance: false,
+    featureFlags: {
+      onlinePayments: true,
+      aiOrderAssistant: true,
+      smsReceipts: true,
+      staffPayroll: false,
+      autoPushTill: true,
+      kitchenDisplay: true,
+      inventoryTracking: true,
+    },
+    createdAt: 1725321600000,
+    updatedAt: Date.now(),
+  },
+];
 
 const STORAGE_KEYS = {
-  ITEMS: 'orderup_items_v1',
+  ITEMS: 'orderup_items_v2',
   ORDERS: 'orderup_orders_v1',
   SETTINGS: 'orderup_settings_v1',
   DEVICES: 'orderup_devices_v1',
@@ -44,6 +146,9 @@ const STORAGE_KEYS = {
   CURRENT_DEVICE_ID: 'orderup_current_device_id_v1',
   ADMIN_SESSION: 'orderup_admin_session_v1',
   AUTH_USER: 'orderup_auth_user_v1',
+  TENANTS: 'orderup_tenants_v1',
+  CURRENT_TENANT_ID: 'orderup_current_tenant_id_v1',
+  JWT_TOKEN: 'orderup_jwt_token_v1',
 };
 
 export function getCurrentDeviceId(): string {
@@ -108,10 +213,51 @@ export function loadStoredItems(): MenuItem[] {
       saveStoredItems(INITIAL_MENU_ITEMS);
       return INITIAL_MENU_ITEMS;
     }
-    return JSON.parse(raw);
+    let parsed: MenuItem[] = JSON.parse(raw);
+    let modified = false;
+
+    // 1. Ensure all existing items have a valid restaurant_id (default to ollis-pizza)
+    parsed = parsed.map((item) => {
+      if (!item.restaurant_id) {
+        modified = true;
+        return { ...item, restaurant_id: 'ollis-pizza' };
+      }
+      return item;
+    });
+
+    // 2. Ensure Safari Bistro items exist
+    const hasSafariItems = parsed.some((item) => item.restaurant_id === 'safari-bistro');
+    if (!hasSafariItems) {
+      parsed = [...parsed, ...SAFARI_BISTRO_MENU];
+      modified = true;
+    }
+
+    // 3. Ensure Zanzibar Spice items exist
+    const hasZanzibarItems = parsed.some((item) => item.restaurant_id === 'zanzibar-spice');
+    if (!hasZanzibarItems) {
+      parsed = [...parsed, ...ZANZIBAR_SPICE_MENU];
+      modified = true;
+    }
+
+    if (modified) {
+      saveStoredItems(parsed);
+    }
+    return parsed;
   } catch {
     return INITIAL_MENU_ITEMS;
   }
+}
+
+export function loadStoredItemsForTenant(tenantId: string): MenuItem[] {
+  const allItems = loadStoredItems();
+  const tenantItems = allItems.filter((i) => (i.restaurant_id || 'ollis-pizza') === tenantId);
+  if (tenantItems.length === 0) {
+    const defaultForTenant = getDefaultMenuItemsForTenant(tenantId);
+    const updatedAll = [...allItems, ...defaultForTenant];
+    saveStoredItems(updatedAll);
+    return defaultForTenant;
+  }
+  return tenantItems;
 }
 
 export function saveStoredItems(items: MenuItem[]): void {
@@ -119,6 +265,17 @@ export function saveStoredItems(items: MenuItem[]): void {
     localStorage.setItem(STORAGE_KEYS.ITEMS, JSON.stringify(items));
   } catch (e) {
     console.error('Failed to save items', e);
+  }
+}
+
+export function saveStoredItemsForTenant(tenantId: string, tenantItems: MenuItem[]): void {
+  try {
+    const allItems = loadStoredItems();
+    const otherItems = allItems.filter((i) => (i.restaurant_id || 'ollis-pizza') !== tenantId);
+    const updated = [...otherItems, ...tenantItems.map((i) => ({ ...i, restaurant_id: tenantId }))];
+    saveStoredItems(updated);
+  } catch (e) {
+    console.error('Failed to save tenant items', e);
   }
 }
 
@@ -537,6 +694,139 @@ export function clearStoredAuthUser(): void {
     console.error('Failed to clear auth user', e);
   }
 }
+
+export function loadStoredTenants(): TenantRestaurant[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.TENANTS);
+    if (!raw) {
+      saveStoredTenants(INITIAL_TENANTS_LIST);
+      return INITIAL_TENANTS_LIST;
+    }
+    const parsed: TenantRestaurant[] = JSON.parse(raw);
+    // Backfill any missing fields for legacy stored tenants
+    let modified = false;
+    const enriched = parsed.map((t) => {
+      const initial = INITIAL_TENANTS_LIST.find((it) => it.id === t.id);
+      let tCopy = { ...t };
+      if (!tCopy.uniqueCode) {
+        tCopy.uniqueCode = initial?.uniqueCode || `REST-${Math.floor(1000 + Math.random() * 9000)}`;
+        modified = true;
+      }
+      if (!tCopy.branchName) {
+        tCopy.branchName = initial?.branchName || 'Main Branch';
+        modified = true;
+      }
+      if (!tCopy.categories || tCopy.categories.length === 0) {
+        tCopy.categories = initial?.categories || ['Appetizers', 'Main Course'];
+        modified = true;
+      }
+      if (!tCopy.paymentMethods || tCopy.paymentMethods.length === 0) {
+        tCopy.paymentMethods = initial?.paymentMethods || ['Cash', 'M-Pesa'];
+        modified = true;
+      }
+      if (tCopy.isUnderMaintenance === undefined) {
+        tCopy.isUnderMaintenance = false;
+        modified = true;
+      }
+      return tCopy;
+    });
+
+    if (modified) {
+      saveStoredTenants(enriched);
+    }
+    return enriched;
+  } catch {
+    return INITIAL_TENANTS_LIST;
+  }
+}
+
+export function saveStoredTenants(tenants: TenantRestaurant[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TENANTS, JSON.stringify(tenants));
+  } catch (e) {
+    console.error('Failed to save tenants list', e);
+  }
+}
+
+/**
+ * Permanently deletes a tenant and cascades data isolation deletion across all
+ * partitioned items, orders, staff, devices, and records with matching restaurant_id.
+ */
+export function deleteTenantCascade(tenantId: string): TenantRestaurant[] {
+  try {
+    const tenants = loadStoredTenants().filter((t) => t.id !== tenantId);
+    saveStoredTenants(tenants);
+
+    // Cascade isolated items
+    const items = loadStoredItems().filter((item) => (item.restaurant_id || 'ollis-pizza') !== tenantId);
+    saveStoredItems(items);
+
+    // Cascade isolated orders
+    const orders = loadStoredOrders().filter((ord) => (ord.restaurant_id || 'ollis-pizza') !== tenantId);
+    saveStoredOrders(orders);
+
+    // Cascade isolated staff
+    const staff = loadStoredStaff().filter((s) => (s.restaurant_id || 'ollis-pizza') !== tenantId);
+    saveStoredStaff(staff);
+
+    // Cascade isolated devices
+    const devices = loadStoredDevices().filter((d) => (d.restaurant_id || 'ollis-pizza') !== tenantId);
+    saveStoredDevices(devices);
+
+    // Cascade isolated purchases
+    const purchases = loadStoredPurchases().filter((p) => (p.restaurant_id || 'ollis-pizza') !== tenantId);
+    saveStoredPurchases(purchases);
+
+    // Reset current tenant if active
+    if (loadCurrentTenantId() === tenantId) {
+      const nextTenant = tenants[0]?.id || 'ollis-pizza';
+      saveCurrentTenantId(nextTenant);
+    }
+
+    return tenants;
+  } catch (err) {
+    console.error('Error cascading tenant deletion:', err);
+    return loadStoredTenants();
+  }
+}
+
+export function loadCurrentTenantId(): string {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.CURRENT_TENANT_ID);
+    return stored || 'ollis-pizza';
+  } catch {
+    return 'ollis-pizza';
+  }
+}
+
+export function saveCurrentTenantId(tenantId: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CURRENT_TENANT_ID, tenantId);
+  } catch (e) {
+    console.error('Failed to save current tenant id', e);
+  }
+}
+
+export function loadStoredJwtToken(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+  } catch {
+    return null;
+  }
+}
+
+export function saveStoredJwtToken(token: string | null): void {
+  try {
+    if (!token) {
+      localStorage.removeItem(STORAGE_KEYS.JWT_TOKEN);
+    } else {
+      localStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
+    }
+  } catch (e) {
+    console.error('Failed to save JWT token', e);
+  }
+}
+
 
 
 

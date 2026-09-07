@@ -45,6 +45,7 @@ export enum Module {
   SECURITY_KEYS = 'security_keys',
   ADMIN_CONTROL = 'admin_control',
   OWNERSHIP_MASTER = 'ownership_master', // Explicit root flag
+  SUPER_ADMIN_PORTAL = 'super_admin_portal', // Multi-Tenant SaaS Portal
 }
 
 // Explicit Action Types
@@ -73,6 +74,7 @@ export const PERMISSIONS: Record<UserRole, Record<Module, PermissionAction[]>> =
     [Module.SECURITY_KEYS]: [], // ❌ No access
     [Module.ADMIN_CONTROL]: [], // ❌ No access
     [Module.OWNERSHIP_MASTER]: [], // ❌ No access
+    [Module.SUPER_ADMIN_PORTAL]: [], // ❌ No access
   },
 
   // ---------- BUSINESS OWNER (Full tenant admin + Staff modules) ----------
@@ -94,6 +96,7 @@ export const PERMISSIONS: Record<UserRole, Record<Module, PermissionAction[]>> =
     [Module.SECURITY_KEYS]: [], // ❌ No access
     [Module.ADMIN_CONTROL]: [], // ❌ No access
     [Module.OWNERSHIP_MASTER]: [], // ❌ No access
+    [Module.SUPER_ADMIN_PORTAL]: [], // ❌ No access
   },
 
   // ---------- APP DEVELOPER (EXPLICIT FULL OWNERSHIP over EVERYTHING) ----------
@@ -122,6 +125,7 @@ export const PERMISSIONS: Record<UserRole, Record<Module, PermissionAction[]>> =
 
     // ----- EXPLICIT OWNERSHIP MASTER FLAG (Root access) -----
     [Module.OWNERSHIP_MASTER]: ['create', 'read', 'update', 'delete'], // Super-root
+    [Module.SUPER_ADMIN_PORTAL]: ['create', 'read', 'update', 'delete'], // Multi-Tenant SaaS Portal
   },
 };
 
@@ -270,5 +274,11 @@ export const MODULE_REGISTRY: ModuleInfo[] = [
     label: 'Super-Root Ownership Master',
     category: 'Developer Infra',
     description: 'Global cross-tenant super-user override and raw RBAC matrix validator.',
+  },
+  {
+    module: Module.SUPER_ADMIN_PORTAL,
+    label: 'Multi-Tenant SaaS Portal',
+    category: 'Developer Infra',
+    description: 'Centralized Super-Admin portal for multi-restaurant onboarding, feature flags, and global metrics.',
   },
 ];

@@ -16,15 +16,22 @@ interface NewItemModalProps {
   onClose: () => void;
   onSave: (newItem: MenuItem) => void;
   currency: string;
+  restaurantId?: string;
+  restaurantName?: string;
+  existingCategories?: string[];
 }
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   'Pizza',
+  'BBQ & Grills',
   'Burgers & Sandwiches',
-  'Chicken',
-  'Meals & Plates',
-  'Sides & Extras',
-  'Drinks',
+  'Chicken & Meat',
+  'Swahili Seafood',
+  'Curries & Stews',
+  'Sides & Snacks',
+  'Platters & Combos',
+  'Drinks & Milkshakes',
+  'Beverages & Juices',
   'Saturday Special',
 ];
 
@@ -32,10 +39,20 @@ export const NewItemModal: React.FC<NewItemModalProps> = ({
   onClose,
   onSave,
   currency,
+  restaurantId = 'ollis-pizza',
+  restaurantName = "Olli's Pizza House",
+  existingCategories = [],
 }) => {
+  const mergedCategories = React.useMemo(() => {
+    const list = Array.from(new Set([...existingCategories.filter(Boolean), ...DEFAULT_CATEGORIES]));
+    return list;
+  }, [existingCategories]);
+
   const [name, setName] = useState<string>('');
-  const [category, setCategory] = useState<string>('Pizza');
-  const [stock, setStock] = useState<number>(15);
+  const [category, setCategory] = useState<string>(() => mergedCategories[0] || 'Mains');
+  const [customCategoryInput, setCustomCategoryInput] = useState<string>('');
+  const [isAddingCustomCategory, setIsAddingCustomCategory] = useState<boolean>(false);
+  const [stock, setStock] = useState<number>(20);
   const [description, setDescription] = useState<string>('');
   const [imageUrl, setImageUrl] = useState<string>('');
   const [useVariants, setUseVariants] = useState<boolean>(false);
@@ -88,10 +105,15 @@ export const NewItemModal: React.FC<NewItemModalProps> = ({
       return;
     }
 
+    const finalCategory = isAddingCustomCategory && customCategoryInput.trim()
+      ? customCategoryInput.trim()
+      : category;
+
     const newItem: MenuItem = {
-      id: `item-${Date.now()}`,
+      id: `item-${restaurantId}-${Date.now()}`,
+      restaurant_id: restaurantId,
       name: name.trim(),
-      category,
+      category: finalCategory,
       stock: Number(stock) || 0,
       icon: 'Utensils',
       description: description.trim() || undefined,
@@ -115,7 +137,12 @@ export const NewItemModal: React.FC<NewItemModalProps> = ({
       <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-[#e2e4dc] flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="p-4 px-5 border-b border-[#e2e4dc] flex items-center justify-between bg-[#fafbfa]">
-          <h3 className="text-base font-bold text-[#1b2620]">Add New Dish / Menu Item</h3>
+          <div>
+            <h3 className="text-base font-bold text-[#1b2620]">Add New Dish / Menu Item</h3>
+            <p className="text-xs text-[#1f4d3e] font-semibold mt-0.5">
+              Customizing for: <span className="font-extrabold">{restaurantName}</span>
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -260,21 +287,42 @@ export const NewItemModal: React.FC<NewItemModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#4c5a52] mb-1">Category</label>
-              <select
-                id="new-dish-category-select"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full p-2.5 text-sm bg-white border border-[#e2e4dc] rounded-xl focus:outline-none focus:border-[#1f4d3e]"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-[#4c5a52]">Category</label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomCategory(!isAddingCustomCategory)}
+                  className="text-[11px] font-bold text-[#1f4d3e] hover:underline"
+                >
+                  {isAddingCustomCategory ? 'Choose Existing' : '+ Custom Category'}
+                </button>
+              </div>
+
+              {isAddingCustomCategory ? (
+                <input
+                  type="text"
+                  placeholder="e.g. Seafood & Soups"
+                  value={customCategoryInput}
+                  onChange={(e) => setCustomCategoryInput(e.target.value)}
+                  className="w-full p-2.5 text-sm bg-white border border-[#1f4d3e] rounded-xl focus:outline-none ring-2 ring-[#1f4d3e]/20"
+                  autoFocus
+                />
+              ) : (
+                <select
+                  id="new-dish-category-select"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full p-2.5 text-sm bg-white border border-[#e2e4dc] rounded-xl focus:outline-none focus:border-[#1f4d3e]"
+                >
+                  {mergedCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>

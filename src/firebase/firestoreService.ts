@@ -21,6 +21,7 @@ import {
   OneTimePasscode,
   MpesaTransaction,
 } from '../types';
+import { getDefaultMenuItemsForTenant } from '../data/restaurantMenus';
 
 // ============================================================================
 // RESTAURANT SETTINGS
@@ -80,12 +81,23 @@ export function subscribeMenuItems(
   );
 }
 
-export async function saveMenuItemToFirestore(item: MenuItem) {
+export async function saveMenuItemToFirestore(item: MenuItem, defaultTenantId = 'ollis-pizza') {
+  const itemToSave = {
+    ...item,
+    restaurant_id: item.restaurant_id || defaultTenantId,
+  };
   const path = `${ITEMS_PATH}/${item.id}`;
   try {
-    await setDoc(doc(db, ITEMS_PATH, item.id), item, { merge: true });
+    await setDoc(doc(db, ITEMS_PATH, item.id), itemToSave, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function seedRestaurantStarterMenuToFirestore(tenantId: string, items?: MenuItem[]) {
+  const itemsToSeed = items || getDefaultMenuItemsForTenant(tenantId);
+  for (const item of itemsToSeed) {
+    await saveMenuItemToFirestore({ ...item, restaurant_id: tenantId }, tenantId);
   }
 }
 
@@ -401,3 +413,84 @@ export async function deleteOTPFromFirestore(otpId: string) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
+
+// ============================================================================
+// MULTI-TENANT DATA MIGRATION SCRIPT
+// ============================================================================
+/**
+ * Multi-Tenant Data Migration:
+ * Inspects all documents across collections in Firestore and guarantees that
+ * any document lacking a `restaurant_id` is retrofitted with the primary tenant ID ('ollis-pizza').
+ */
+export async function migrateFirestoreDataToTenant(defaultTenantId = 'ollis-pizza'): Promise<{
+  migratedItems: number;
+  migratedOrders: number;
+  migratedStaff: number;
+  migratedDevices: number;
+  migratedPurchases: number;
+}> {
+  const result = {
+    migratedItems: 0,
+    migratedOrders: 0,
+    migratedStaff: 0,
+    migratedDevices: 0,
+    migratedPurchases: 0,
+  };
+
+  try {
+    // 1. Menu items
+    const itemsSnap = await getDocs(collection(db, ITEMS_PATH));
+    for (const d of itemsSnap.docs) {
+      const data = d.data();
+      if (!data.restaurant_id) {
+        await updateDoc(doc(db, ITEMS_PATH, d.id), { restaurant_id: defaultTenantId });
+        result.migratedItems++;
+      }
+    }
+
+    // 2. Orders
+    const ordersSnap = await getDocs(collection(db, ORDERS_PATH));
+    for (const d of ordersSnap.docs) {
+      const data = d.data();
+      if (!data.restaurant_id) {
+        await updateDoc(doc(db, ORDERS_PATH, d.id), { restaurant_id: defaultTenantId });
+        result.migratedOrders++;
+      }
+    }
+
+    // 3. Staff roster
+    const staffSnap = await getDocs(collection(db, STAFF_PATH));
+    for (const d of staffSnap.docs) {
+      const data = d.data();
+      if (!data.restaurant_id) {
+        await updateDoc(doc(db, STAFF_PATH, d.id), { restaurant_id: defaultTenantId });
+        result.migratedStaff++;
+      }
+    }
+
+    // 4. Hardware terminals
+    const devicesSnap = await getDocs(collection(db, DEVICES_PATH));
+    for (const d of devicesSnap.docs) {
+      const data = d.data();
+      if (!data.restaurant_id) {
+        await updateDoc(doc(db, DEVICES_PATH, d.id), { restaurant_id: defaultTenantId });
+        result.migratedDevices++;
+      }
+    }
+
+    // 5. Purchases
+    const purchasesSnap = await getDocs(collection(db, PURCHASES_PATH));
+    for (const d of purchasesSnap.docs) {
+      const data = d.data();
+      if (!data.restaurant_id) {
+        await updateDoc(doc(db, PURCHASES_PATH, d.id), { restaurant_id: defaultTenantId });
+        result.migratedPurchases++;
+      }
+    }
+  } catch (err) {
+    console.warn('Multi-tenant data migration check completed with warning:', err);
+  }
+
+  return result;
+}
+
