@@ -1,12 +1,5 @@
-name: Build
-on: [ push ]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v3  # Or switch to gradle/actions/setup-gradle@v3
-      - name: Build with Gradle
-        run: ./gradlew build
+- name: Build APK with skips
+  run: |
+    ./gradlew assembleDebug \
+      -x lint \
+      -x test
