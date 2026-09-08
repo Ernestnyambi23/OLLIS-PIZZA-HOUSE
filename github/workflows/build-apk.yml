@@ -1,5 +1,5 @@
-- name: Build APK with skips
+- name: Build APK
   run: |
-    ./gradlew assembleDebug \
-      -x lint \
-      -x test
+    cd android
+    chmod +x gradlew
+    ./gradlew assembleDebug
